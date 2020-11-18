@@ -40,18 +40,98 @@ randomrange(int lo, int hi)
 
 #define N  1000
 
-void
+/*void
 printf(int fd, const char *s, ...)
 {
   write(fd, s, strlen(s));
+}*/
+
+static void
+putc(int fd, char c)
+{
+  write(fd, &c, 1);
+}
+
+static void
+printint(int fd, int xx, int base, int sgn)
+{
+  static char digits[] = "0123456789ABCDEF";
+  char buf[16];
+  int i, neg;
+  uint x;
+
+  neg = 0;
+  if(sgn && xx < 0){
+    neg = 1;
+    x = -xx;
+  } else {
+    x = xx;
+  }
+
+  i = 0;
+  do{
+    buf[i++] = digits[x % base];
+  }while((x /= base) != 0);
+  if(neg)
+    buf[i++] = '-';
+
+  while(--i >= 0)
+    putc(fd, buf[i]);
+}
+
+// Print to the given fd. Only understands %d, %x, %p, %s.
+void
+printf(int fd, const char *fmt, ...)
+{
+  char *s;
+  int c, i, state;
+  uint *ap;
+
+  state = 0;
+  ap = (uint*)(void*)&fmt + 1;
+  for(i = 0; fmt[i]; i++){
+    c = fmt[i] & 0xff;
+    if(state == 0){
+      if(c == '%'){
+        state = '%';
+      } else {
+        putc(fd, c);
+      }
+    } else if(state == '%'){
+      if(c == 'd'){
+        printint(fd, *ap, 10, 1);
+        ap++;
+      } else if(c == 'x' || c == 'p'){
+        printint(fd, *ap, 16, 0);
+        ap++;
+      } else if(c == 's'){
+        s = (char*)*ap;
+        ap++;
+        if(s == 0)
+          s = "(null)";
+        while(*s != 0){
+          putc(fd, *s);
+          s++;
+        }
+      } else if(c == 'c'){
+        putc(fd, *ap);
+        ap++;
+      } else if(c == '%'){
+        putc(fd, c);
+      } else {
+        // Unknown % sequence.  Print it to draw attention.
+        putc(fd, '%');
+        putc(fd, c);
+      }
+      state = 0;
+    }
+  }
 }
 
 void
 forktest(void)
 {
   int n, pid;
-
-  //size = atoi(argv[1]);
 
   printf(1, "fork test\n");
 
@@ -87,9 +167,72 @@ int
 main(int argc, char *argv[])
 {
 
-  int size = atoi(argv[1]);
-  size = size +1;
-  printf(1, "fork test OK\n");
-  forktest();
+  int size = 0;
+  size =  atoi(argv[1]);
+  //size = size +1;
+  int array[size];
+  int storage[size];
+  int tracer = 0;
+  /*array[1] = randomrange(0,10000);
+  array[0] = randomrange(0,10000);
+  array[2] = randomrange(0,10000);
+  printf(1, "fork test %d\n", array[0]);
+  printf(1, "fork test %d\n", array[1]);
+  printf(1, "fork test %d\n", array[2]);*/
+  printf(1, "lab02 starts\n");
+
+  int n, pid;
+
+  for(n=0; n<size; n++){
+    pid = fork();
+    if(pid < 0)
+      break;
+    else if(pid == 0){
+	    for(int i=0; i <= n; i++)
+	    array[n]= randomrange(0,10000);
+      printf(1, "Hello, I am Child %d", n+1);
+      printf(1, " with random number %d\n", array[n]);
+      //sleep(5);
+      exit();
+    }
+    else{
+	storage[tracer] = wait();
+	tracer++;
+    }
+  }
+
+  /*if(n == size){
+    printf(1, "fork claimed to work N times!\n", size);
+    exit();
+  }*/
+
+  for(n=1; n < size; n++){
+     storage[tracer] = wait();
+     tracer++;
+	  /*if(wait() < 0){
+      printf(1, "wait stopped early\n");
+      exit();
+    }*/
+  }
+  
+  tracer = 0;
+
+  for(int j = 0; j < size; j++){
+	  array[j] = randomrange(0, 10000);
+  printf(1, "Child id: %d\n", storage[j]);
+  	if (tracer < array[j]){
+  		tracer = array[j];
+  	}
+  }
+  printf(1, "The biggest number is %d\n", tracer);
+
+
+  if(wait() != -1){
+    printf(1, "wait got too many\n", storage[0]);
+    exit();
+  }
+
+  printf(1, "lab02 OK\n");
+  //forktest();
   exit();
 }
